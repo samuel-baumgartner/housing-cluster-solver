@@ -5,7 +5,6 @@ from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 from .footprints import BBOX, door_path_cell, footprint_set, orientation_variants
 from .fast_grid import SearchPass
 from .grid import WorldGrid, neighbors4
-from .landscape import place_natural_circles
 from .scoring import (
     collect_frontier,
     line_mix_bonus,
@@ -14,7 +13,8 @@ from .scoring import (
     trim_frontier,
     would_commit,
 )
-from .types import Candidate, Cell, House, HousingLine, SolveResult, SolveStep
+from .layout import layout_enabled, plan_district_layout
+from .types import Candidate, Cell, District, House, HousingLine, SolveResult, SolveStep
 
 
 def find_best_candidate(
@@ -24,6 +24,7 @@ def find_best_candidate(
     th_paths: Set[Cell],
     skip_keys: Set[str],
     require_strand: bool,
+    district_interior: Optional[Set[Cell]] = None,
 ) -> Tuple[Optional[Candidate], Set[Cell], List[Candidate]]:
     free = grid.unreserved_zone()
     if not free:
@@ -32,7 +33,9 @@ def find_best_candidate(
     if free_size == (0, 0):
         return None, set(), []
     network = grid.path_network(planned)
-    frontier = collect_frontier(grid, houses, planned, th_paths)
+    frontier = collect_frontier(
+        grid, houses, planned, th_paths, district_interior=district_interior
+    )
     _, zone_size = grid.bbox_of(grid.zone)
     free_ratio = len(free) / max(1, len(grid.zone))
     trim_limit = 200 if zone_size[1] >= 12 and free_ratio > 0.35 else 64
@@ -121,12 +124,15 @@ def try_open_street_at_row(
     grid: WorldGrid,
     street_y: int,
     planned: Dict[Cell, bool],
+    district_interior: Optional[Set[Cell]] = None,
 ) -> bool:
     street_cells = {
         c
         for c in grid.zone
         if c[1] == street_y and c not in grid.reserved
     }
+    if district_interior is not None:
+        street_cells &= district_interior
     if not street_cells:
         return False
     for c in street_cells:
@@ -148,23 +154,29 @@ def try_open_street_at_row(
 def try_open_interior_street(
     grid: WorldGrid,
     planned: Dict[Cell, bool],
+    district_interior: Optional[Set[Cell]] = None,
 ) -> bool:
     row_set = set()
-    for c in grid.zone:
+    search_zone = district_interior if district_interior is not None else grid.zone
+    for c in search_zone:
         if c in grid.reserved:
             continue
         south = (c[0], c[1] + 1)
         if south in grid.reserved:
             row_set.add(c[1])
     if not row_set:
-        return _try_open_boundary_spine(grid, planned)
+        return _try_open_boundary_spine(grid, planned, district_interior)
     for street_y in sorted(row_set, reverse=True):
-        if try_open_street_at_row(grid, street_y, planned):
+        if try_open_street_at_row(grid, street_y, planned, district_interior):
             return True
-    return _try_open_boundary_spine(grid, planned)
+    return _try_open_boundary_spine(grid, planned, district_interior)
 
 
-def _try_open_boundary_spine(grid: WorldGrid, planned: Dict[Cell, bool]) -> bool:
+def _try_open_boundary_spine(
+    grid: WorldGrid,
+    planned: Dict[Cell, bool],
+    district_interior: Optional[Set[Cell]] = None,
+) -> bool:
     pos, size = grid.bbox_of(grid.zone)
     if size == (0, 0):
         return False
@@ -174,6 +186,8 @@ def _try_open_boundary_spine(grid: WorldGrid, planned: Dict[Cell, bool]) -> bool
             for y in range(pos[1], pos[1] + size[1])
             if (spine_x, y) in grid.zone and (spine_x, y) not in grid.reserved
         }
+        if district_interior is not None:
+            spine_cells &= district_interior
         if not spine_cells:
             continue
         for c in spine_cells:
@@ -240,20 +254,14 @@ def commit_house(
     return True, route
 
 
-def solve(
-    grid: WorldGrid,
-    record_steps: bool = True,
-    *,
-    landscape: bool = False,
-    landscape_cells: int = 300,
-    landscape_seed: int = 42,
-) -> SolveResult:
+def solve(grid: WorldGrid, record_steps: bool = True) -> SolveResult:
     houses: List[House] = []
     planned: Set[Cell] = set()
     steps: List[SolveStep] = []
     th_paths = set(grid.th_paths)
     skip_keys: Set[str] = set()
     street_opens = 0
+    districts: List[District] = []
 
     def snap(
         kind: str,
@@ -264,9 +272,14 @@ def solve(
         selected: Optional[Candidate] = None,
         highlight_fp: Optional[Set[Cell]] = None,
         route: Optional[List[Cell]] = None,
+        layout_districts: Optional[List[District]] = None,
     ) -> None:
         if not record_steps:
             return
+        dlist = layout_districts if layout_districts is not None else districts
+        landscape = set()
+        for d in dlist:
+            landscape.update(d.ring)
         steps.append(
             SolveStep(
                 kind=kind,
@@ -278,30 +291,108 @@ def solve(
                 frontier=frontier or set(),
                 highlight_footprint=highlight_fp or set(),
                 highlight_path_route=route or [],
-                landscape=set(grid.landscape),
+                landscape=landscape,
+                districts=list(dlist),
                 top_candidates=top or [],
                 selected=selected,
             )
         )
 
-    snap("init", "Green zone ready", f"{len(grid.zone) + len(grid.landscape)} buildable cells")
-    if landscape:
-        blobs = place_natural_circles(
-            grid, cells_per_circle=landscape_cells, seed=landscape_seed
-        )
+    snap("init", "Green zone ready", f"{len(grid.zone)} buildable cells")
+
+    layout_result = plan_district_layout(grid) if layout_enabled(len(grid.zone)) else None
+    if layout_result is not None:
+        districts, planned = layout_result
+        grid.bump_planned_version()
+        grid._ensure_accel().sync_planned(planned)
         snap(
-            "landscape",
-            "Natural landscape circles",
-            f"{len(blobs)} cells carved",
-            highlight_fp=blobs,
+            "layout",
+            f"{len(districts)} districts",
+            f"{len(planned)} pre-planned street cells",
+            layout_districts=districts,
         )
+        for district in districts:
+            street_opens = _solve_district(
+                grid,
+                district,
+                houses,
+                planned,
+                th_paths,
+                skip_keys,
+                street_opens,
+                snap,
+            )
+    else:
+        street_opens = _solve_greedy(
+            grid,
+            houses,
+            planned,
+            th_paths,
+            skip_keys,
+            street_opens,
+            snap,
+            district_interior=None,
+        )
+
+    if not steps or steps[-1].kind != "done":
+        snap("done", "Saturated", f"{len(houses)} homes, {len(planned)} path tiles")
+    return SolveResult(houses=houses, planned_paths=planned, steps=steps)
+
+
+def _solve_district(
+    grid: WorldGrid,
+    district: District,
+    houses: List[House],
+    planned: Set[Cell],
+    th_paths: Set[Cell],
+    skip_keys: Set[str],
+    street_opens: int,
+    snap,
+) -> int:
+    skip_keys.clear()
+    snap(
+        "district",
+        f"District {district.id + 1}",
+        f"{len(district.interior)} interior cells",
+        layout_districts=[district],
+    )
+    return _solve_greedy(
+        grid,
+        houses,
+        planned,
+        th_paths,
+        skip_keys,
+        street_opens,
+        snap,
+        district_interior=district.interior,
+        max_street_opens=12,
+    )
+
+
+def _solve_greedy(
+    grid: WorldGrid,
+    houses: List[House],
+    planned: Set[Cell],
+    th_paths: Set[Cell],
+    skip_keys: Set[str],
+    street_opens: int,
+    snap,
+    district_interior: Optional[Set[Cell]],
+    max_street_opens: int = 48,
+) -> int:
     guard = 0
     while guard < 256:
         guard += 1
         placed = False
         while True:
             best, frontier, top = find_best_candidate(
-                grid, houses, planned, th_paths, skip_keys, True
+                grid,
+                houses,
+                planned,
+                th_paths,
+                skip_keys,
+                True,
+                district_interior=district_interior,
             )
             if best is None:
                 break
@@ -341,7 +432,7 @@ def solve(
             continue
         before = set(planned)
         planned_dict: Dict[Cell, bool] = {c: True for c in planned}
-        if try_open_interior_street(grid, planned_dict):
+        if try_open_interior_street(grid, planned_dict, district_interior):
             planned = set(planned_dict.keys())
             grid.bump_planned_version()
             grid._ensure_accel().sync_planned(planned)
@@ -353,13 +444,12 @@ def solve(
                 f"+{len(new_cells)} path cells",
                 highlight_fp=new_cells,
             )
-            if street_opens > 48:
+            if street_opens > max_street_opens:
                 break
             skip_keys.clear()
             continue
-        snap("done", "Saturated", f"{len(houses)} homes, {len(planned)} path tiles")
         break
-    return SolveResult(houses=houses, planned_paths=planned, steps=steps)
+    return street_opens
 
 
 def LINE_NAME(line: HousingLine) -> str:

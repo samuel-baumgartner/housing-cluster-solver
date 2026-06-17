@@ -9,7 +9,7 @@ import pytest
 @pytest.mark.slow
 def test_trim_frontier_keeps_all_placeable_origins() -> None:
     """Placeable cells must survive trim even when far from path/building anchors."""
-    result = solve(WorldGrid.demo_deep_zone(), record_steps=True, landscape=False)
+    result = solve(WorldGrid.demo_deep_zone(), record_steps=True)
     checked = False
     for step in result.steps:
         if step.kind != "evaluate":
@@ -32,7 +32,7 @@ def test_trim_frontier_keeps_all_placeable_origins() -> None:
 @pytest.mark.slow
 def test_trim_frontier_finds_interior_pocket_before_false_stop() -> None:
     """Regression: interior top-row pocket must be searchable before saturation."""
-    result = solve(WorldGrid.demo_deep_zone(), record_steps=True, landscape=False)
+    result = solve(WorldGrid.demo_deep_zone(), record_steps=True)
     step = next(
         s
         for s in result.steps
@@ -51,14 +51,14 @@ def test_trim_frontier_finds_interior_pocket_before_false_stop() -> None:
 
 
 def test_solve_places_past_false_saturation_pocket() -> None:
-    result = solve(WorldGrid.demo_deep_zone(), record_steps=False, landscape=False)
+    result = solve(WorldGrid.demo_deep_zone(), record_steps=False)
     assert len(result.houses) >= 14
 
 
 def test_collect_frontier_includes_reserved_origin_corners() -> None:
     """Origins may sit on reserved cells when the footprint extends into free space."""
     grid = WorldGrid.demo_deep_zone(zone_min=(8, 14), zone_max=(37, 33), path_y=34)
-    result = solve(grid, record_steps=True, landscape=False)
+    result = solve(grid, record_steps=True)
     step = next(s for s in result.steps if s.kind == "evaluate" and len(s.houses) == 4)
     g = WorldGrid.demo_deep_zone(zone_min=(8, 14), zone_max=(37, 33), path_y=34)
     g.sync_solver_snapshot(step.reserved)

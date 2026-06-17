@@ -220,6 +220,7 @@ def collect_frontier(
     houses: List[House],
     planned: Set[Cell],
     th_paths: Set[Cell],
+    district_interior: Optional[Set[Cell]] = None,
 ) -> Set[Cell]:
     network = grid.path_network(planned)
     _, zone_size = grid.bbox_of(grid.zone)
@@ -228,6 +229,8 @@ def collect_frontier(
     seeds: Set[Cell] = set()
     if len(houses) >= 2 and zone_size[1] >= 12 and free_ratio > 0.35:
         seeds = grid.unreserved_zone().copy()
+        if district_interior is not None:
+            seeds &= district_interior
     elif not houses:
         for c in grid.zone:
             if c in grid.reserved:
@@ -254,7 +257,10 @@ def collect_frontier(
                 expanded.add(n)
                 q.append(n)
         seeds = expanded
-    seeds |= reserved_ne_corner_origins(grid, houses, planned)
+    extras = reserved_ne_corner_origins(grid, houses, planned, district_interior)
+    seeds |= extras
+    if district_interior is not None:
+        seeds &= district_interior
     return seeds
 
 
@@ -276,6 +282,7 @@ def reserved_ne_corner_origins(
     grid: WorldGrid,
     houses: List[House],
     planned: Set[Cell],
+    district_interior: Optional[Set[Cell]] = None,
 ) -> Set[Cell]:
     """Reserved NE building corners that can still anchor a valid footprint."""
     extras: Set[Cell] = set()

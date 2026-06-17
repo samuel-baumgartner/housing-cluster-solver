@@ -32,7 +32,6 @@ python animate.py --save-gif out.gif
 | Step kind | Meaning |
 |-----------|---------|
 | `init` | Green zone painted |
-| `landscape` | Large natural circles carved from the zone (before any paths or homes) |
 | `evaluate` | Frontier (white dots), top scored candidates, highlighted best footprint |
 | `place` | Home committed + door access path (numbered orange tiles) |
 | `reject` | Candidate failed strand/path check |

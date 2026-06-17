@@ -28,7 +28,6 @@ class WorldGrid:
     width: int
     height: int
     zone: Set[Cell] = field(default_factory=set)
-    landscape: Set[Cell] = field(default_factory=set)
     paths: Set[Cell] = field(default_factory=set)  # existing TH-connected paths
     reserved: Set[Cell] = field(default_factory=set)
     planned_paths: Set[Cell] = field(default_factory=set)

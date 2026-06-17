@@ -27,7 +27,14 @@ COLOR_GRID = "#1a1a2e"
 COLOR_BG = "#16213e"
 COLOR_TRY_OK = "#66ffcc"
 COLOR_TRY_BAD = "#ff6666"
-COLOR_LANDSCAPE = "#2a6f7a"
+DISTRICT_COLORS = [
+    "#4a6fa533",
+    "#6a4a8a33",
+    "#4a8a6a33",
+    "#8a6a4a33",
+    "#4a7a8a33",
+    "#8a4a6a33",
+]
 
 
 def _parse_cell(value: str) -> Tuple[int, int]:
@@ -194,19 +201,35 @@ def draw_step(
             )
         )
 
-    landscape = step.landscape or grid.landscape
-    for c in landscape:
-        ax.add_patch(
-            plt.Rectangle(
-                (c[0] + 0.02, c[1] + 0.02),
-                0.96,
-                0.96,
-                facecolor=COLOR_LANDSCAPE,
-                edgecolor="#1d4d55",
-                linewidth=0.2,
-                alpha=0.85,
-            )
-        )
+    # District interiors (layout / per-district growth)
+    if step.districts:
+        for d in step.districts:
+            tint = DISTRICT_COLORS[d.id % len(DISTRICT_COLORS)]
+            for c in d.interior:
+                if c in free_zone:
+                    ax.add_patch(
+                        plt.Rectangle(
+                            (c[0], c[1]),
+                            1,
+                            1,
+                            facecolor=tint,
+                            edgecolor="none",
+                            alpha=0.85,
+                        )
+                    )
+            for c in d.ring:
+                if c not in step.planned_paths and c not in grid.paths:
+                    ax.add_patch(
+                        plt.Rectangle(
+                            (c[0], c[1]),
+                            1,
+                            1,
+                            facecolor="#5a4a3a",
+                            edgecolor="#887766",
+                            linewidth=0.4,
+                            alpha=0.45,
+                        )
+                    )
 
     # Planned paths
     for c in step.planned_paths:
@@ -383,7 +406,6 @@ def draw_step(
     # Legend
     patches = [
         mpatches.Patch(color=COLOR_ZONE, label="green zone"),
-        mpatches.Patch(color=COLOR_LANDSCAPE, label="landscape"),
         mpatches.Patch(color=LINE_COLORS[1], label="small"),
         mpatches.Patch(color=LINE_COLORS[2], label="big"),
         mpatches.Patch(color=LINE_COLORS[3], label="L"),
@@ -592,11 +614,6 @@ def main() -> None:
         metavar="Y",
         help="Road row below zone (default: preset value, or zone_max_y+1 when size is custom)",
     )
-    parser.add_argument(
-        "--landscape",
-        action="store_true",
-        help="Carve large natural blobs from the zone before placing homes",
-    )
     parser.add_argument("--save-gif", metavar="PATH", help="Export animation as GIF")
     parser.add_argument(
         "--try-mode",
@@ -623,7 +640,7 @@ def main() -> None:
     print(
         f"Solving {args.zone} zone ({_zone_label(grid)}, {len(grid.zone)} cells)..."
     )
-    result = solve(grid, record_steps=True, landscape=args.landscape)
+    result = solve(grid, record_steps=True)
     print(f"Done: {len(result.houses)} houses, {len(result.steps)} animation steps")
 
     if args.save_gif:

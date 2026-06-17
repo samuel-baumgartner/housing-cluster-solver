@@ -56,6 +56,14 @@ class Candidate:
 
 
 @dataclass
+class District:
+    id: int
+    cells: Set[Cell]
+    interior: Set[Cell]
+    ring: Set[Cell]
+
+
+@dataclass
 class SolveStep:
     """One frame in the step-by-step animation."""
 
@@ -69,6 +77,7 @@ class SolveStep:
     highlight_footprint: Set[Cell] = field(default_factory=set)
     highlight_path_route: List[Cell] = field(default_factory=list)
     landscape: Set[Cell] = field(default_factory=set)
+    districts: List[District] = field(default_factory=list)
     top_candidates: List[Candidate] = field(default_factory=list)
     selected: Optional[Candidate] = None
 
