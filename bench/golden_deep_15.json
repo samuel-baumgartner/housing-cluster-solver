@@ -1,0 +1,357 @@
+{
+  "houses": [
+    {
+      "origin": [
+        8,
+        14
+      ],
+      "line": 1,
+      "quarter_turns": 3,
+      "flipped": false,
+      "path_cell": [
+        7,
+        15
+      ]
+    },
+    {
+      "origin": [
+        8,
+        18
+      ],
+      "line": 2,
+      "quarter_turns": 3,
+      "flipped": false,
+      "path_cell": [
+        7,
+        20
+      ]
+    },
+    {
+      "origin": [
+        28,
+        22
+      ],
+      "line": 3,
+      "quarter_turns": 0,
+      "flipped": true,
+      "path_cell": [
+        34,
+        30
+      ]
+    },
+    {
+      "origin": [
+        8,
+        23
+      ],
+      "line": 2,
+      "quarter_turns": 3,
+      "flipped": false,
+      "path_cell": [
+        7,
+        25
+      ]
+    },
+    {
+      "origin": [
+        12,
+        22
+      ],
+      "line": 3,
+      "quarter_turns": 0,
+      "flipped": false,
+      "path_cell": [
+        13,
+        30
+      ]
+    },
+    {
+      "origin": [
+        29,
+        26
+      ],
+      "line": 1,
+      "quarter_turns": 0,
+      "flipped": false,
+      "path_cell": [
+        30,
+        30
+      ]
+    },
+    {
+      "origin": [
+        24,
+        26
+      ],
+      "line": 2,
+      "quarter_turns": 0,
+      "flipped": false,
+      "path_cell": [
+        26,
+        30
+      ]
+    },
+    {
+      "origin": [
+        20,
+        26
+      ],
+      "line": 1,
+      "quarter_turns": 0,
+      "flipped": false,
+      "path_cell": [
+        21,
+        30
+      ]
+    },
+    {
+      "origin": [
+        16,
+        26
+      ],
+      "line": 1,
+      "quarter_turns": 0,
+      "flipped": false,
+      "path_cell": [
+        17,
+        30
+      ]
+    },
+    {
+      "origin": [
+        12,
+        14
+      ],
+      "line": 3,
+      "quarter_turns": 1,
+      "flipped": false,
+      "path_cell": [
+        20,
+        20
+      ]
+    },
+    {
+      "origin": [
+        21,
+        20
+      ],
+      "line": 2,
+      "quarter_turns": 3,
+      "flipped": false,
+      "path_cell": [
+        20,
+        22
+      ]
+    },
+    {
+      "origin": [
+        18,
+        15
+      ],
+      "line": 1,
+      "quarter_turns": 0,
+      "flipped": true,
+      "path_cell": [
+        20,
+        19
+      ]
+    },
+    {
+      "origin": [
+        23,
+        16
+      ],
+      "line": 1,
+      "quarter_turns": 3,
+      "flipped": false,
+      "path_cell": [
+        22,
+        17
+      ]
+    },
+    {
+      "origin": [
+        27,
+        14
+      ],
+      "line": 3,
+      "quarter_turns": 3,
+      "flipped": false,
+      "path_cell": [
+        26,
+        15
+      ]
+    },
+    {
+      "origin": [
+        28,
+        17
+      ],
+      "line": 2,
+      "quarter_turns": 3,
+      "flipped": false,
+      "path_cell": [
+        27,
+        19
+      ]
+    }
+  ],
+  "planned_paths": [
+    [
+      15,
+      25
+    ],
+    [
+      15,
+      26
+    ],
+    [
+      15,
+      27
+    ],
+    [
+      15,
+      28
+    ],
+    [
+      15,
+      29
+    ],
+    [
+      16,
+      25
+    ],
+    [
+      17,
+      25
+    ],
+    [
+      18,
+      25
+    ],
+    [
+      19,
+      25
+    ],
+    [
+      20,
+      19
+    ],
+    [
+      20,
+      20
+    ],
+    [
+      20,
+      21
+    ],
+    [
+      20,
+      22
+    ],
+    [
+      20,
+      23
+    ],
+    [
+      20,
+      24
+    ],
+    [
+      20,
+      25
+    ],
+    [
+      21,
+      19
+    ],
+    [
+      21,
+      25
+    ],
+    [
+      22,
+      15
+    ],
+    [
+      22,
+      16
+    ],
+    [
+      22,
+      17
+    ],
+    [
+      22,
+      18
+    ],
+    [
+      22,
+      19
+    ],
+    [
+      22,
+      25
+    ],
+    [
+      23,
+      15
+    ],
+    [
+      23,
+      25
+    ],
+    [
+      24,
+      15
+    ],
+    [
+      24,
+      25
+    ],
+    [
+      25,
+      15
+    ],
+    [
+      25,
+      20
+    ],
+    [
+      25,
+      21
+    ],
+    [
+      25,
+      22
+    ],
+    [
+      25,
+      23
+    ],
+    [
+      25,
+      24
+    ],
+    [
+      25,
+      25
+    ],
+    [
+      26,
+      15
+    ],
+    [
+      26,
+      20
+    ],
+    [
+      27,
+      19
+    ],
+    [
+      27,
+      20
+    ]
+  ]
+}
