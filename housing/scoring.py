@@ -16,25 +16,6 @@ BLOB_MIN_CELLS = 64
 BLOB_PENALTY_PER_CELL = 2
 
 
-def is_compact_wide_zone(zone_size: Tuple[int, int]) -> bool:
-    """Wide shallow zones like 30×20 where edge packing dominates search."""
-    zw, zh = zone_size
-    return zw >= 28 and zh >= 18
-
-
-def frontier_trim_limit(
-    grid: WorldGrid,
-    zone_size: Tuple[int, int],
-    free_ratio: float,
-    n_houses: int = 0,
-) -> int:
-    if is_compact_wide_zone(zone_size):
-        return 200 if n_houses < 5 else 34
-    if zone_size[1] >= 12 and free_ratio > 0.35:
-        return 200
-    return 64
-
-
 def blob_cell_cap(zone_cell_count: int) -> int:
     return max(BLOB_MIN_CELLS, int(BLOB_ZONE_FRACTION * zone_cell_count))
 
@@ -325,9 +306,6 @@ def trim_frontier(
     *,
     network: Optional[Set[Cell]] = None,
     placeable_cache: Optional[Dict[Cell, bool]] = None,
-    zone_size: Optional[Tuple[int, int]] = None,
-    n_houses: int = 0,
-    houses: Optional[List[House]] = None,
 ) -> Set[Cell]:
     if len(frontier) <= limit:
         return frontier
@@ -348,10 +326,6 @@ def trim_frontier(
         scored.append((best_d, origin))
     scored.sort(key=lambda t: t[0])
     nearest = {o for _, o in scored[:limit]}
-    if zone_size is None:
-        _, zone_size = grid.bbox_of(grid.zone)
-    if is_compact_wide_zone(zone_size) and houses is not None:
-        return nearest | reserved_ne_corner_origins(grid, houses, planned)
     if placeable_cache is None:
         placeable = {o for o in frontier if origin_can_place(grid, o, planned)}
     else:

@@ -68,6 +68,7 @@ class SolveStep:
     frontier: Set[Cell] = field(default_factory=set)
     highlight_footprint: Set[Cell] = field(default_factory=set)
     highlight_path_route: List[Cell] = field(default_factory=list)
+    landscape: Set[Cell] = field(default_factory=set)
     top_candidates: List[Candidate] = field(default_factory=list)
     selected: Optional[Candidate] = None
 

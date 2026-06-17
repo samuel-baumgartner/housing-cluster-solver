@@ -100,26 +100,13 @@ def footprint_cells(
 
 
 def orientation_variants(line: HousingLine) -> List[Tuple[int, bool]]:
-    return list(ORIENTATION_VARIANTS[line])
-
-
-ORIENTATION_VARIANTS: dict[HousingLine, Tuple[Tuple[int, bool], ...]] = {}
-
-
-def _build_orientation_variants() -> dict[HousingLine, Tuple[Tuple[int, bool], ...]]:
-    table: dict[HousingLine, Tuple[Tuple[int, bool], ...]] = {}
-    for line in HousingLine:
-        out: List[Tuple[int, bool]] = []
-        custom = line == HousingLine.L
-        for qt in range(4):
-            out.append((qt, False))
-            if custom or qt in (0, 2):
-                out.append((qt, True))
-        table[line] = tuple(out)
-    return table
-
-
-ORIENTATION_VARIANTS.update(_build_orientation_variants())
+    out: List[Tuple[int, bool]] = []
+    custom = line == HousingLine.L
+    for qt in range(4):
+        out.append((qt, False))
+        if custom or qt in (0, 2):
+            out.append((qt, True))
+    return out
 
 
 def _build_orient_offset_tables() -> dict[tuple[int, int, bool], Tuple[Cell, ...]]:

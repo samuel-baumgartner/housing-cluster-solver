@@ -8,7 +8,6 @@ from typing import List, Optional, Set, Tuple
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import numpy as np
 from matplotlib.widgets import Button
 
 from housing.diagnose import PlacementDiagnosis, diagnose_placement
@@ -28,134 +27,7 @@ COLOR_GRID = "#1a1a2e"
 COLOR_BG = "#16213e"
 COLOR_TRY_OK = "#66ffcc"
 COLOR_TRY_BAD = "#ff6666"
-
-_DOOR_RGB = (255, 235, 59)
-_PATH_RGB = (196, 165, 116)
-_PLANNED_RGB = (232, 200, 122)
-_ZONE_RGB = (61, 139, 64)
-_BG_RGB = (22, 33, 62)
-_HIGHLIGHT_RGB = (255, 235, 59)
-_ROUTE_RGB = (255, 87, 34)
-_FRONTIER_RGB = (255, 255, 255)
-_FRONTIER_ALPHA = 0x44 / 255.0  # matches COLOR_FRONTIER #ffffff44
-_TRY_OK_RGB = (102, 255, 204)
-_TRY_BAD_RGB = (255, 102, 102)
-_LINE_RGB = {
-    HousingLine.SMALL: (74, 144, 217),
-    HousingLine.BIG: (230, 126, 34),
-    HousingLine.L: (155, 89, 182),
-}
-
-
-def _cells_xy(cells, width: int, height: int) -> Tuple[np.ndarray, np.ndarray]:
-    if not cells:
-        empty = np.empty(0, dtype=np.int32)
-        return empty, empty
-    xs = np.fromiter((c[0] for c in cells), dtype=np.int32, count=len(cells))
-    ys = np.fromiter((c[1] for c in cells), dtype=np.int32, count=len(cells))
-    ok = (xs >= 0) & (xs < width) & (ys >= 0) & (ys < height)
-    return xs[ok], ys[ok]
-
-
-def _paint(img: np.ndarray, xs: np.ndarray, ys: np.ndarray, rgb: Tuple[int, int, int]) -> None:
-    if xs.size == 0:
-        return
-    img[ys, xs, 0] = rgb[0]
-    img[ys, xs, 1] = rgb[1]
-    img[ys, xs, 2] = rgb[2]
-    img[ys, xs, 3] = 255
-
-
-def _blend(
-    img: np.ndarray,
-    xs: np.ndarray,
-    ys: np.ndarray,
-    rgb: Tuple[int, int, int],
-    alpha: float,
-) -> None:
-    if xs.size == 0:
-        return
-    a = int(alpha * 255)
-    inv = 255 - a
-    fg = np.array(rgb, dtype=np.uint16)
-    bg = img[ys, xs, :3].astype(np.uint16)
-    img[ys, xs, :3] = ((fg * a + bg * inv) // 255).astype(np.uint8)
-    img[ys, xs, 3] = 255
-
-
-def build_step_rgba(
-    grid: WorldGrid,
-    step: SolveStep,
-    *,
-    try_diag: Optional[PlacementDiagnosis] = None,
-) -> np.ndarray:
-    h, w = grid.height, grid.width
-    img = np.empty((h, w, 4), dtype=np.uint8)
-    img[..., 0] = _BG_RGB[0]
-    img[..., 1] = _BG_RGB[1]
-    img[..., 2] = _BG_RGB[2]
-    img[..., 3] = 255
-
-    xs, ys = _cells_xy(grid.paths, w, h)
-    _paint(img, xs, ys, _PATH_RGB)
-
-    free_zone = grid.zone - step.reserved - step.planned_paths
-    xs, ys = _cells_xy(free_zone, w, h)
-    _paint(img, xs, ys, _ZONE_RGB)
-
-    xs, ys = _cells_xy(step.planned_paths, w, h)
-    _paint(img, xs, ys, _PLANNED_RGB)
-
-    for hse in step.houses:
-        fp = footprint_set(hse.origin, hse.line, hse.quarter_turns, hse.flipped)
-        xs, ys = _cells_xy(fp, w, h)
-        _paint(img, xs, ys, _LINE_RGB[hse.line])
-        door = entrance_door_cell(hse.origin, hse.line, hse.quarter_turns, hse.flipped)
-        if 0 <= door[0] < w and 0 <= door[1] < h:
-            _paint(img, np.array([door[0]], np.int32), np.array([door[1]], np.int32), _DOOR_RGB)
-
-    xs, ys = _cells_xy(step.highlight_footprint, w, h)
-    _paint(img, xs, ys, _HIGHLIGHT_RGB)
-
-    xs, ys = _cells_xy(step.highlight_path_route, w, h)
-    _paint(img, xs, ys, _ROUTE_RGB)
-
-    # Semi-transparent frontier markers (opaque white looked like broken holes).
-    highlight = step.highlight_footprint
-    frontier_cells = [c for c in step.frontier if c not in highlight]
-    xs, ys = _cells_xy(frontier_cells, w, h)
-    _blend(img, xs, ys, _FRONTIER_RGB, _FRONTIER_ALPHA)
-
-    if try_diag is not None:
-        rgb = _TRY_OK_RGB if try_diag.ok else _TRY_BAD_RGB
-        xs, ys = _cells_xy(try_diag.footprint, w, h)
-        _paint(img, xs, ys, rgb)
-        if try_diag.door_cell:
-            d = try_diag.door_cell
-            if 0 <= d[0] < w and 0 <= d[1] < h:
-                _paint(img, np.array([d[0]], np.int32), np.array([d[1]], np.int32), _DOOR_RGB)
-        xs, ys = _cells_xy(try_diag.route, w, h)
-        _paint(img, xs, ys, _ROUTE_RGB)
-
-    return img
-
-
-def _side_panel_text(
-    step: SolveStep,
-    *,
-    try_diag: Optional[PlacementDiagnosis] = None,
-) -> Optional[str]:
-    if try_diag is not None:
-        return _format_diagnosis(try_diag)
-    if not step.top_candidates:
-        return None
-    lines = ["Top scores:"]
-    for cand in step.top_candidates[:5]:
-        mark = "→" if step.selected and cand.key() == step.selected.key() else " "
-        lines.append(
-            f"{mark} {cand.score:4d}  {cand.label}@{cand.origin} qt{cand.quarter_turns}"
-        )
-    return "\n".join(lines)
+COLOR_LANDSCAPE = "#2a6f7a"
 
 
 def _parse_cell(value: str) -> Tuple[int, int]:
@@ -259,17 +131,259 @@ def _format_diagnosis(diag: PlacementDiagnosis) -> str:
     return "\n".join(lines)
 
 
-def _setup_axes(ax, grid: WorldGrid) -> None:
+def draw_step(
+    ax,
+    grid: WorldGrid,
+    step: SolveStep,
+    step_idx: int,
+    total: int,
+    *,
+    try_diag: Optional[PlacementDiagnosis] = None,
+    try_mode: bool = False,
+) -> None:
+    ax.clear()
     ax.set_facecolor(COLOR_BG)
     ax.set_aspect("equal")
     margin = 2
     ax.set_xlim(-margin, grid.width + margin)
-    ax.set_ylim(grid.height + margin, -margin)
-    ax.tick_params(colors="white", labelsize=7)
-    for spine in ax.spines.values():
-        spine.set_color("#444466")
+    ax.set_ylim(grid.height + margin, -margin)  # y down
+    title = f"Step {step_idx + 1}/{total}: [{step.kind}] {step.title}"
+    if try_mode:
+        title += "  [TRY MODE — click grid]"
+    ax.set_title(
+        title,
+        color="white",
+        fontsize=11,
+        pad=8,
+    )
+    if step.detail:
+        ax.text(
+            0.01,
+            0.02,
+            step.detail,
+            transform=ax.transAxes,
+            color="#aaaacc",
+            fontsize=9,
+            verticalalignment="bottom",
+        )
+
+    # Existing paths (outside zone too)
+    for c in grid.paths:
+        ax.add_patch(
+            plt.Rectangle(
+                (c[0] - 0.05, c[1] - 0.05),
+                0.9,
+                0.9,
+                facecolor=COLOR_PATH,
+                edgecolor="none",
+            )
+        )
+
+    # Green zone (free)
+    free_zone = grid.zone - step.reserved - step.planned_paths
+    for c in free_zone:
+        ax.add_patch(
+            plt.Rectangle(
+                (c[0], c[1]),
+                1,
+                1,
+                facecolor=COLOR_ZONE,
+                edgecolor="#2a5a2e",
+                linewidth=0.3,
+                alpha=0.55,
+            )
+        )
+
+    landscape = step.landscape or grid.landscape
+    for c in landscape:
+        ax.add_patch(
+            plt.Rectangle(
+                (c[0] + 0.02, c[1] + 0.02),
+                0.96,
+                0.96,
+                facecolor=COLOR_LANDSCAPE,
+                edgecolor="#1d4d55",
+                linewidth=0.2,
+                alpha=0.85,
+            )
+        )
+
+    # Planned paths
+    for c in step.planned_paths:
+        ax.add_patch(
+            plt.Rectangle(
+                (c[0] - 0.05, c[1] - 0.05),
+                0.9,
+                0.9,
+                facecolor=COLOR_PLANNED,
+                edgecolor="#aa8833",
+                linewidth=0.5,
+            )
+        )
+
+    # Frontier dots
+    for c in step.frontier:
+        ax.plot(c[0] + 0.5, c[1] + 0.5, "o", color="white", markersize=3, alpha=0.35)
+
+    # Placed houses at this step
+    for h in step.houses:
+        fp = footprint_set(h.origin, h.line, h.quarter_turns, h.flipped)
+        color = LINE_COLORS[h.line]
+        for c in fp:
+            ax.add_patch(
+                plt.Rectangle(
+                    (c[0] + 0.05, c[1] + 0.05),
+                    0.9,
+                    0.9,
+                    facecolor=color,
+                    edgecolor="white",
+                    linewidth=0.6,
+                    alpha=0.9,
+                )
+            )
+        door = entrance_door_cell(h.origin, h.line, h.quarter_turns, h.flipped)
+        ax.plot(
+            door[0] + 0.5,
+            door[1] + 0.5,
+            "D",
+            color="#ffeb3b",
+            markersize=6,
+            markeredgecolor="black",
+        )
+        if h.path_cell:
+            ax.plot(
+                h.path_cell[0] + 0.5,
+                h.path_cell[1] + 0.5,
+                "s",
+                color="white",
+                markersize=5,
+                markeredgecolor="black",
+            )
+
+    # Candidate highlight
+    for c in step.highlight_footprint:
+        ax.add_patch(
+            plt.Rectangle(
+                (c[0], c[1]),
+                1,
+                1,
+                facecolor=COLOR_HIGHLIGHT,
+                edgecolor="white",
+                linewidth=1.2,
+                alpha=0.55,
+            )
+        )
+
+    # Path route being added
+    for i, c in enumerate(step.highlight_path_route):
+        ax.add_patch(
+            plt.Rectangle(
+                (c[0] - 0.05, c[1] - 0.05),
+                0.9,
+                0.9,
+                facecolor=COLOR_ROUTE,
+                edgecolor="white",
+                linewidth=0.8,
+                alpha=0.85,
+            )
+        )
+        ax.text(
+            c[0] + 0.5,
+            c[1] + 0.5,
+            str(i + 1),
+            ha="center",
+            va="center",
+            color="white",
+            fontsize=7,
+        )
+
+    # Interactive try-placement overlay
+    if try_diag is not None:
+        color = COLOR_TRY_OK if try_diag.ok else COLOR_TRY_BAD
+        for c in try_diag.footprint:
+            ax.add_patch(
+                plt.Rectangle(
+                    (c[0], c[1]),
+                    1,
+                    1,
+                    facecolor=color,
+                    edgecolor="white",
+                    linewidth=1.4,
+                    alpha=0.65,
+                )
+            )
+        if try_diag.door_cell:
+            ax.plot(
+                try_diag.door_cell[0] + 0.5,
+                try_diag.door_cell[1] + 0.5,
+                "D",
+                color="#ffeb3b",
+                markersize=8,
+                markeredgecolor="black",
+            )
+        if try_diag.path_cell:
+            ax.plot(
+                try_diag.path_cell[0] + 0.5,
+                try_diag.path_cell[1] + 0.5,
+                "s",
+                color="white",
+                markersize=6,
+                markeredgecolor="black",
+            )
+        for i, c in enumerate(try_diag.route):
+            ax.add_patch(
+                plt.Rectangle(
+                    (c[0] - 0.05, c[1] - 0.05),
+                    0.9,
+                    0.9,
+                    facecolor=COLOR_ROUTE,
+                    edgecolor="white",
+                    linewidth=0.8,
+                    alpha=0.85,
+                )
+            )
+            ax.text(
+                c[0] + 0.5,
+                c[1] + 0.5,
+                str(i + 1),
+                ha="center",
+                va="center",
+                color="white",
+                fontsize=7,
+            )
+        ax.text(
+            1.01,
+            0.98,
+            _format_diagnosis(try_diag),
+            transform=ax.transAxes,
+            color="#ccccdd",
+            fontsize=8,
+            verticalalignment="top",
+            family="monospace",
+        )
+    # Top candidates legend
+    elif step.top_candidates:
+        lines = ["Top scores:"]
+        for i, cand in enumerate(step.top_candidates[:5]):
+            mark = "→" if step.selected and cand.key() == step.selected.key() else " "
+            lines.append(
+                f"{mark} {cand.score:4d}  {cand.label}@{cand.origin} qt{cand.quarter_turns}"
+            )
+        ax.text(
+            1.01,
+            0.98,
+            "\n".join(lines),
+            transform=ax.transAxes,
+            color="#ccccdd",
+            fontsize=8,
+            verticalalignment="top",
+            family="monospace",
+        )
+
+    # Legend
     patches = [
         mpatches.Patch(color=COLOR_ZONE, label="green zone"),
+        mpatches.Patch(color=COLOR_LANDSCAPE, label="landscape"),
         mpatches.Patch(color=LINE_COLORS[1], label="small"),
         mpatches.Patch(color=LINE_COLORS[2], label="big"),
         mpatches.Patch(color=LINE_COLORS[3], label="L"),
@@ -283,58 +397,9 @@ def _setup_axes(ax, grid: WorldGrid) -> None:
         facecolor="#222244",
         labelcolor="white",
     )
-
-
-def draw_step(
-    ax,
-    grid: WorldGrid,
-    step: SolveStep,
-    step_idx: int,
-    total: int,
-    *,
-    try_diag: Optional[PlacementDiagnosis] = None,
-    try_mode: bool = False,
-) -> None:
-    """Draw one solver frame (numpy raster, used for GIF export)."""
-    ax.clear()
-    _setup_axes(ax, grid)
-    rgba = build_step_rgba(grid, step, try_diag=try_diag)
-    ax.imshow(
-        rgba,
-        origin="upper",
-        extent=(0, grid.width, grid.height, 0),
-        interpolation="nearest",
-        zorder=0,
-    )
-    title = f"Step {step_idx + 1}/{total}: [{step.kind}] {step.title}"
-    if try_mode:
-        title += "  [TRY MODE — click grid]"
-    ax.set_title(title, color="white", fontsize=11, pad=8)
-    panel = _side_panel_text(step, try_diag=try_diag)
-    show_detail = step.detail and not step.top_candidates and (
-        try_mode or not panel
-    )
-    if show_detail:
-        ax.text(
-            0.01,
-            0.14,
-            step.detail,
-            transform=ax.transAxes,
-            color="#aaaacc",
-            fontsize=9,
-            verticalalignment="bottom",
-        )
-    if panel:
-        ax.text(
-            1.01,
-            0.98,
-            panel,
-            transform=ax.transAxes,
-            color="#ccccdd",
-            fontsize=8,
-            verticalalignment="top",
-            family="monospace",
-        )
+    ax.tick_params(colors="white", labelsize=7)
+    for spine in ax.spines.values():
+        spine.set_color("#444466")
 
 
 class StepPlayer:
@@ -373,11 +438,6 @@ class StepPlayer:
         self.fig.canvas.mpl_connect("key_press_event", self._on_key)
         self.fig.canvas.mpl_connect("button_press_event", self._on_click)
         self._timer = None
-        self._im = None
-        self._detail_text = None
-        self._side_text = None
-        self._axes_ready = False
-        self._auto_ms = 250
         self._draw()
 
     def _current_step(self) -> SolveStep:
@@ -419,68 +479,15 @@ class StepPlayer:
         self._draw()
 
     def _draw(self) -> None:
-        step = self._current_step()
-        if not self._axes_ready:
-            self.ax.clear()
-            _setup_axes(self.ax, self.grid)
-            blank = np.zeros((self.grid.height, self.grid.width, 4), dtype=np.uint8)
-            blank[..., :3] = _BG_RGB
-            blank[..., 3] = 255
-            self._im = self.ax.imshow(
-                blank,
-                origin="upper",
-                extent=(0, self.grid.width, self.grid.height, 0),
-                interpolation="nearest",
-                zorder=0,
-            )
-            self._axes_ready = True
-
-        rgba = build_step_rgba(
+        draw_step(
+            self.ax,
             self.grid,
-            step,
+            self._current_step(),
+            self.idx,
+            len(self.steps),
             try_diag=self.try_diag if self.try_mode else None,
+            try_mode=self.try_mode,
         )
-        self._im.set_data(rgba)
-
-        title = f"Step {self.idx + 1}/{len(self.steps)}: [{step.kind}] {step.title}"
-        if self.try_mode:
-            title += "  [TRY MODE — click grid]"
-        self.ax.set_title(title, color="white", fontsize=11, pad=8)
-
-        if self._detail_text is not None:
-            self._detail_text.remove()
-            self._detail_text = None
-        if self._side_text is not None:
-            self._side_text.remove()
-            self._side_text = None
-        panel = _side_panel_text(
-            step, try_diag=self.try_diag if self.try_mode else None
-        )
-        show_detail = step.detail and not step.top_candidates and (
-            self.try_mode or not panel
-        )
-        if show_detail:
-            self._detail_text = self.ax.text(
-                0.01,
-                0.14,
-                step.detail,
-                transform=self.ax.transAxes,
-                color="#aaaacc",
-                fontsize=9,
-                verticalalignment="bottom",
-            )
-        if panel:
-            self._side_text = self.ax.text(
-                1.01,
-                0.98,
-                panel,
-                transform=self.ax.transAxes,
-                color="#ccccdd",
-                fontsize=8,
-                verticalalignment="top",
-                family="monospace",
-            )
-
         self.fig.canvas.draw_idle()
 
     def _move(self, delta: int) -> None:
@@ -545,7 +552,7 @@ class StepPlayer:
     def _auto(self) -> None:
         if self.idx < len(self.steps) - 1:
             self._move(1)
-            self.fig.canvas.new_timer(interval=self._auto_ms).single_shot(
+            self.fig.canvas.new_timer(interval=600).single_shot(
                 0, self._auto
             )
 
@@ -585,6 +592,11 @@ def main() -> None:
         metavar="Y",
         help="Road row below zone (default: preset value, or zone_max_y+1 when size is custom)",
     )
+    parser.add_argument(
+        "--landscape",
+        action="store_true",
+        help="Carve large natural blobs from the zone before placing homes",
+    )
     parser.add_argument("--save-gif", metavar="PATH", help="Export animation as GIF")
     parser.add_argument(
         "--try-mode",
@@ -611,8 +623,7 @@ def main() -> None:
     print(
         f"Solving {args.zone} zone ({_zone_label(grid)}, {len(grid.zone)} cells)..."
     )
-    solve(_build_grid(args), record_steps=False)
-    result = solve(grid, record_steps=True, animation=True)
+    result = solve(grid, record_steps=True, landscape=args.landscape)
     print(f"Done: {len(result.houses)} houses, {len(result.steps)} animation steps")
 
     if args.save_gif:

@@ -8,11 +8,10 @@ import numpy as np
 
 from .fast_bfs import (
     build_reach_zone_free_flat,
-    batch_orient_can_place,
-    batch_orient_dists,
     can_place_fp_flat,
     cells_from_route_array,
     door_dist_block_fp_flat,
+    batch_orient_dists,
     door_dist_to_network_flat,
     multi_source_bfs_dist_flat,
     route_shortest_hug_flat,
@@ -609,12 +608,12 @@ class GridAccel:
             for x, y in saved_r:
                 reserved_scratch[y, x] = False
 
-    def score_fp_array(
+    def score_fp(
         self,
-        fp_arr: np.ndarray,
+        fp: FrozenSet[Cell],
         route_len: int,
         origin_y: int,
-        south_edge: Optional[int],
+        south_edge: int,
         zone_cell_count: int,
         free_ratio: float,
         n_houses: int,
@@ -633,6 +632,7 @@ class GridAccel:
             BLOB_ZONE_FRACTION,
         )
 
+        fp_arr = self._fp_array(fp)
         return int(
             score_footprint_flat(
                 fp_arr,
@@ -659,38 +659,6 @@ class GridAccel:
                 self._seen_gen,
                 score_gen,
             )
-        )
-
-    def score_fp(
-        self,
-        fp: FrozenSet[Cell],
-        route_len: int,
-        origin_y: int,
-        south_edge: int,
-        zone_cell_count: int,
-        free_ratio: float,
-        n_houses: int,
-        house_cells: np.ndarray,
-        house_offsets: np.ndarray,
-        planned_flat: np.ndarray,
-        network: np.ndarray,
-        walkable: np.ndarray,
-        score_gen: int,
-    ) -> int:
-        return self.score_fp_array(
-            self._fp_array(fp),
-            route_len,
-            origin_y,
-            south_edge,
-            zone_cell_count,
-            free_ratio,
-            n_houses,
-            house_cells,
-            house_offsets,
-            planned_flat,
-            network,
-            walkable,
-            score_gen,
         )
 
 
@@ -806,11 +774,11 @@ class SearchPass:
                 origin, offsets, self.planned_flat
             )
             self._orient_can_place[i] = ok_place
-            self._orient_fp_offsets[i] = fp_count
             if ok_place:
                 ddx, ddy = _DOOR_PATH_OFFSETS[okey]
                 self._orient_doors[i, 0] = ox + ddx
                 self._orient_doors[i, 1] = oy + ddy
+                self._orient_fp_offsets[i] = fp_count
                 for dx, dy in offsets:
                     if fp_count >= self._orient_fp_flat.shape[0]:
                         grown = np.zeros((fp_count + 64, 2), dtype=np.int32)
@@ -822,9 +790,9 @@ class SearchPass:
             else:
                 self._orient_doors[i, 0] = 0
                 self._orient_doors[i, 1] = 0
+                self._orient_fp_offsets[i] = fp_count
         self._orient_fp_offsets[n] = fp_count
 
-        self.walk_scratch = self.walkable.copy()
         gen = self.accel._bump_gen()
         batch_orient_dists(
             self.walk_scratch,
@@ -854,7 +822,6 @@ class SearchPass:
             out.append((route_len, qt, flip, None, route_len, ok))
             key = (origin, line, qt, flip)
             self.eval_cache[key] = (None, None, route_len, ok)
-        self.walk_scratch = self.walkable.copy()
         return out
 
     def _next_score_gen(self) -> int:
@@ -996,33 +963,6 @@ class SearchPass:
         entry = (True, sim, route, route_len)
         self.route_cache[rkey] = entry
         return True, sim, route_len
-
-    def score_orient_idx(
-        self,
-        origin_y: int,
-        orient_idx: int,
-        route_len: int,
-        n_houses: int,
-    ) -> int:
-        start = int(self._orient_fp_offsets[orient_idx])
-        end = int(self._orient_fp_offsets[orient_idx + 1])
-        fp_slice = self._orient_fp_flat[start:end]
-        gen = self._next_score_gen()
-        return self.accel.score_fp_array(
-            fp_slice,
-            route_len,
-            origin_y,
-            self.south_edge,
-            self.zone_cell_count,
-            self.free_ratio,
-            n_houses,
-            self.house_cells,
-            self.house_offsets,
-            self.planned_flat,
-            self.network_mask,
-            self.walkable,
-            gen,
-        )
 
     def score(
         self,

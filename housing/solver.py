@@ -5,10 +5,9 @@ from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 from .footprints import BBOX, door_path_cell, footprint_set, orientation_variants
 from .fast_grid import SearchPass
 from .grid import WorldGrid, neighbors4
+from .landscape import place_natural_circles
 from .scoring import (
     collect_frontier,
-    frontier_trim_limit,
-    is_compact_wide_zone,
     line_mix_bonus,
     line_order_for_span,
     line_order_smallest_first,
@@ -36,18 +35,10 @@ def find_best_candidate(
     frontier = collect_frontier(grid, houses, planned, th_paths)
     _, zone_size = grid.bbox_of(grid.zone)
     free_ratio = len(free) / max(1, len(grid.zone))
-    trim_limit = frontier_trim_limit(grid, zone_size, free_ratio, len(houses))
+    trim_limit = 200 if zone_size[1] >= 12 and free_ratio > 0.35 else 64
     placeable_cache: Dict[Cell, bool] = {}
     frontier = trim_frontier(
-        frontier,
-        grid,
-        planned,
-        trim_limit,
-        network=network,
-        placeable_cache=placeable_cache,
-        zone_size=zone_size,
-        n_houses=len(houses),
-        houses=houses,
+        frontier, grid, planned, trim_limit, network=network, placeable_cache=placeable_cache
     )
     if not frontier:
         return None, set(), []
@@ -66,37 +57,30 @@ def find_best_candidate(
         grid, planned, houses, house_fps, free_ratio, south_edge, zone_size
     )
 
-    mix_bonus = {line: line_mix_bonus(line, houses, zone_size) for line in HousingLine}
-    use_batch = is_compact_wide_zone(zone_size)
     scored: List[Candidate] = []
     for origin in sorted(frontier):
         for line in line_order:
             orients = orientation_variants(line)
-            if use_batch:
-                orient_data = search.batch_line_orients(origin, int(line), orients)
-            else:
-                orient_data = []
-                for qt, flip in orients:
-                    _, _, route_len, ok = search.evaluate(
-                        origin, int(line), qt, flip
-                    )
-                    orient_data.append((route_len, qt, flip, None, route_len, ok))
+            orient_data: List[Tuple[int, int, bool, Optional[FrozenSet[Cell]], int, bool]] = []
+            for qt, flip in orients:
+                _, _, route_len, ok = search.evaluate(origin, int(line), qt, flip)
+                orient_data.append((route_len, qt, flip, None, route_len, ok))
             orient_data.sort(key=lambda t: t[0])
             orient_limit = (
                 len(orient_data)
                 if require_strand or len(houses) < 3
-                else min(2 if is_compact_wide_zone(zone_size) and len(houses) >= 5 else 3, len(orient_data))
+                else min(3, len(orient_data))
             )
             for route_len, qt, flipped, fp, _, ok in orient_data[:orient_limit]:
                 if not ok:
                     continue
+                if not fp:
+                    fp = footprint_set(origin, line, qt, flipped)
                 cand = Candidate(origin, line, qt, flipped, 0)
                 if cand.key() in skip_keys:
                     continue
-                if not fp:
-                    fp = footprint_set(origin, line, qt, flipped)
                 score = search.score(origin, route_len, fp, len(houses))
-                score += mix_bonus[line]
+                score += line_mix_bonus(line, houses, zone_size)
                 scored.append(Candidate(origin, line, qt, flipped, score))
     if not scored:
         return None, frontier, []
@@ -256,23 +240,20 @@ def commit_house(
     return True, route
 
 
-def solve(grid: WorldGrid, record_steps: bool = True, *, animation: bool = False) -> SolveResult:
+def solve(
+    grid: WorldGrid,
+    record_steps: bool = True,
+    *,
+    landscape: bool = False,
+    landscape_cells: int = 300,
+    landscape_seed: int = 42,
+) -> SolveResult:
     houses: List[House] = []
     planned: Set[Cell] = set()
     steps: List[SolveStep] = []
     th_paths = set(grid.th_paths)
     skip_keys: Set[str] = set()
     street_opens = 0
-    frontier_snap_limit = 64 if animation else 0
-
-    def _snap_frontier(frontier: Optional[Set[Cell]]) -> Set[Cell]:
-        if not frontier:
-            return set()
-        if not frontier_snap_limit or len(frontier) <= frontier_snap_limit:
-            return set(frontier)
-        items = sorted(frontier)
-        stride = len(items) / frontier_snap_limit
-        return {items[int(i * stride)] for i in range(frontier_snap_limit)}
 
     def snap(
         kind: str,
@@ -297,12 +278,23 @@ def solve(grid: WorldGrid, record_steps: bool = True, *, animation: bool = False
                 frontier=frontier or set(),
                 highlight_footprint=highlight_fp or set(),
                 highlight_path_route=route or [],
+                landscape=set(grid.landscape),
                 top_candidates=top or [],
                 selected=selected,
             )
         )
 
-    snap("init", "Green zone ready", f"{len(grid.zone)} buildable cells")
+    snap("init", "Green zone ready", f"{len(grid.zone) + len(grid.landscape)} buildable cells")
+    if landscape:
+        blobs = place_natural_circles(
+            grid, cells_per_circle=landscape_cells, seed=landscape_seed
+        )
+        snap(
+            "landscape",
+            "Natural landscape circles",
+            f"{len(blobs)} cells carved",
+            highlight_fp=blobs,
+        )
     guard = 0
     while guard < 256:
         guard += 1
@@ -317,7 +309,7 @@ def solve(grid: WorldGrid, record_steps: bool = True, *, animation: bool = False
                 "evaluate",
                 f"Best candidate score {best.score}",
                 f"{best.label} at {best.origin} qt={best.quarter_turns}",
-                frontier=_snap_frontier(frontier),
+                frontier=frontier,
                 top=top,
                 selected=best,
                 highlight_fp=footprint_set(

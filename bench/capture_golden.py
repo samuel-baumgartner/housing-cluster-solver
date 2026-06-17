@@ -30,7 +30,7 @@ def result_to_dict(result) -> dict:
 
 def main() -> None:
     grid = WorldGrid.demo_deep_zone()
-    result = solve(grid, record_steps=False)
+    result = solve(grid, record_steps=False, landscape=False)
     data = result_to_dict(result)
     GOLDEN_PATH.write_text(json.dumps(data, indent=2) + "\n")
     print(f"Wrote {len(result.houses)} houses to {GOLDEN_PATH}")

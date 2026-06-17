@@ -28,6 +28,7 @@ class WorldGrid:
     width: int
     height: int
     zone: Set[Cell] = field(default_factory=set)
+    landscape: Set[Cell] = field(default_factory=set)
     paths: Set[Cell] = field(default_factory=set)  # existing TH-connected paths
     reserved: Set[Cell] = field(default_factory=set)
     planned_paths: Set[Cell] = field(default_factory=set)
@@ -70,14 +71,8 @@ class WorldGrid:
     ) -> "WorldGrid":
         xmin, ymin = zone_min
         xmax, ymax = zone_max
-        zone_w = xmax - xmin + 1
-        zone_h = ymax - ymin + 1
-        if zone_w >= 28 and zone_h >= 18:
-            w = xmax + 4
-            h = path_y + 3
-        else:
-            w = max(48, xmax + 4)
-            h = max(36, path_y + 4)
+        w = max(48, xmax + 4)
+        h = max(36, path_y + 4)
         g = cls(width=w, height=h)
         for x in range(w):
             g.paths.add((x, path_y))

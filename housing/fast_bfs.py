@@ -390,43 +390,6 @@ def door_dist_block_fp_flat(
 
 
 @njit(cache=True)
-def batch_orient_can_place(
-    fp_flat: np.ndarray,
-    fp_offsets: np.ndarray,
-    zone: np.ndarray,
-    reserved: np.ndarray,
-    paths: np.ndarray,
-    planned_flat: np.ndarray,
-    w: int,
-    h: int,
-    out: np.ndarray,
-) -> None:
-    n = fp_offsets.shape[0] - 1
-    for oi in range(n):
-        start = fp_offsets[oi]
-        end = fp_offsets[oi + 1]
-        if start >= end:
-            out[oi] = False
-            continue
-        ok = True
-        for fi in range(start, end):
-            x = fp_flat[fi, 0]
-            y = fp_flat[fi, 1]
-            if x < 0 or x >= w or y < 0 or y >= h:
-                ok = False
-                break
-            if (
-                not zone[y, x]
-                or reserved[y, x]
-                or paths[y, x]
-                or planned_flat[y * w + x]
-            ):
-                ok = False
-                break
-        out[oi] = ok
-
-
-@njit(cache=True)
 def batch_orient_dists(
     walkable: np.ndarray,
     network: np.ndarray,

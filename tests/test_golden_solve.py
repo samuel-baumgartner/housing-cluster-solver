@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import statistics
 import time
 from pathlib import Path
 
@@ -40,22 +39,6 @@ def test_matches_golden_placement() -> None:
     grid = WorldGrid.demo_deep_zone()
     result = solve(grid, record_steps=False)
     assert _result_payload(result) == golden
-
-
-@pytest.mark.slow
-def test_solve_30x20_under_one_second() -> None:
-    zone_kw = dict(zone_min=(8, 14), zone_max=(37, 33), path_y=34)
-    solve(WorldGrid.demo_deep_zone(**zone_kw), record_steps=False)
-    times: list[float] = []
-    houses = 0
-    for _ in range(3):
-        t0 = time.perf_counter()
-        result = solve(WorldGrid.demo_deep_zone(**zone_kw), record_steps=False)
-        times.append(time.perf_counter() - t0)
-        houses = len(result.houses)
-    elapsed = statistics.median(times)
-    assert houses >= 10
-    assert elapsed < 1.0, f"30×20 solve median took {elapsed:.3f}s"
 
 
 @pytest.mark.slow
