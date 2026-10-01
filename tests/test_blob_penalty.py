@@ -1,14 +1,11 @@
-import pytest
-
 from housing.footprints import footprint_set
 from housing.grid import WorldGrid
+from housing.layout import LAYOUT_MIN_ZONE
 from housing.scoring import (
     blob_cell_cap,
     blob_size_penalty,
     reserved_component_size,
-    score_candidate,
 )
-from housing.solver import solve
 from housing.types import HousingLine
 
 
@@ -33,25 +30,16 @@ def test_blob_penalty_on_oversized_cluster_with_space_left() -> None:
     assert penalty == (71 - cap) * 2
 
 
-@pytest.mark.slow
-def test_score_candidate_includes_blob_penalty() -> None:
-    played = solve(WorldGrid.demo_deep_zone(), record_steps=True)
-    step = next(s for s in played.steps if len(s.houses) == 8)
-    grid = WorldGrid.demo_deep_zone()
-    grid.reserved = set(step.reserved)
-    origin = (32, 14)
-    kwargs = dict(
-        origin=origin,
-        line=HousingLine.SMALL,
-        qt=3,
-        flipped=False,
-        grid=grid,
-        houses=step.houses,
-        th_paths=set(grid.th_paths),
-        planned=set(step.planned_paths),
+def test_blob_penalty_skipped_on_layout_zones() -> None:
+    reserved = {(x, 10) for x in range(70)}
+    fp = {(70, 10)}
+    assert (
+        blob_size_penalty(
+            fp,
+            reserved,
+            [None] * 6,  # type: ignore[list-item]
+            LAYOUT_MIN_ZONE,
+            0.50,
+        )
+        == 0
     )
-    score_big_blob = score_candidate(**kwargs)
-    grid.reserved = {(20, 20)}
-    kwargs["grid"] = grid
-    score_small_blob = score_candidate(**kwargs)
-    assert score_big_blob < score_small_blob

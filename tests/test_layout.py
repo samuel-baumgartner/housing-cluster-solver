@@ -1,6 +1,7 @@
 from housing.grid import WorldGrid
 from housing.layout import (
     LAYOUT_MIN_ZONE,
+    _streets_have_orthogonal_corners,
     district_loop_closed,
     layout_enabled,
     plan_district_layout,
@@ -18,6 +19,7 @@ def test_district_loops_are_closed() -> None:
     assert ring_has_no_path_gaps(planned, grid, zone)
     for d in districts:
         assert district_loop_closed(d, planned, grid, zone)
+    assert _streets_have_orthogonal_corners(planned, grid)
 
 
 def test_no_full_perimeter_parallel_to_paths() -> None:

@@ -6,6 +6,7 @@ import numpy as np
 
 from .footprints import BBOX, door_path_cell, footprint_cells, footprint_set, orientation_variants
 from .grid import WorldGrid, neighbors4
+from .layout import LAYOUT_MIN_ZONE
 from .types import Candidate, Cell, House, HousingLine
 
 STRANDED_POCKET_MIN = 16
@@ -46,6 +47,8 @@ def blob_size_penalty(
     free_ratio: float,
 ) -> int:
     """Penalize growing one mega-cluster while the district still has open space."""
+    if zone_cell_count >= LAYOUT_MIN_ZONE:
+        return 0
     if len(houses) < BLOB_PENALTY_MIN_HOUSES or free_ratio <= BLOB_PENALTY_FREE_RATIO:
         return 0
     if not footprint:

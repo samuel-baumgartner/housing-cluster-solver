@@ -150,6 +150,51 @@ def _build_district_objects(
     return result
 
 
+def _bridge_diagonal_corners(
+    grid: WorldGrid, streets: Set[Cell], zone: Set[Cell]
+) -> Set[Cell]:
+    """Fill 2x2 diagonal street corners with one orthogonal bridge cell."""
+    result = set(streets)
+    changed = True
+    while changed:
+        changed = False
+        street_graph = result | grid.paths
+        for c in sorted(result):
+            x, y = c
+            for dx, dy in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+                b = (x + dx, y + dy)
+                if b not in street_graph or c >= b:
+                    continue
+                bridge_a = (x, b[1])
+                bridge_b = (b[0], y)
+                if bridge_a in street_graph or bridge_b in street_graph:
+                    continue
+                for bridge in sorted((bridge_a, bridge_b)):
+                    if bridge in zone and bridge not in grid.paths:
+                        result.add(bridge)
+                        changed = True
+                        break
+    return result
+
+
+def _streets_have_orthogonal_corners(
+    streets: Set[Cell], grid: WorldGrid
+) -> bool:
+    street_graph = streets | grid.paths
+    for c in streets:
+        x, y = c
+        for dx, dy in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+            b = (x + dx, y + dy)
+            if b not in street_graph:
+                continue
+            bridge_a = (x, b[1])
+            bridge_b = (b[0], y)
+            if bridge_a in street_graph or bridge_b in street_graph:
+                continue
+            return False
+    return True
+
+
 def _close_ring_connectors(
     grid: WorldGrid, streets: Set[Cell], zone: Set[Cell]
 ) -> Set[Cell]:
@@ -221,6 +266,8 @@ def validate_layout_loops(
     grid: WorldGrid,
     zone: Set[Cell],
 ) -> None:
+    if not _streets_have_orthogonal_corners(streets, grid):
+        raise ValueError("layout ring has diagonal-only street corners")
     if not ring_has_no_path_gaps(streets, grid, zone):
         raise ValueError("layout ring has dead-ends that should connect to paths")
     for d in districts:
@@ -285,18 +332,23 @@ def _interior_reachable(
     return any(reach[c[1], c[0]] for c in interior)
 
 
+def _refine_streets(grid: WorldGrid, streets: Set[Cell], zone: Set[Cell]) -> Set[Cell]:
+    streets = _bridge_diagonal_corners(grid, streets, zone)
+    streets = _close_ring_connectors(grid, streets, zone)
+    streets = _bridge_diagonal_corners(grid, streets, zone)
+    return streets
+
+
 def _planned_from_partition(
     grid: WorldGrid,
     partition: Dict[int, Set[Cell]],
 ) -> Tuple[List[District], Set[Cell]]:
     zone = set(grid.zone)
-    streets = _single_width_streets(zone, partition, grid)
-    streets = _close_ring_connectors(grid, streets, zone)
+    streets = _refine_streets(grid, _single_width_streets(zone, partition, grid), zone)
     districts = _build_district_objects(partition, streets)
     planned = {c for c in streets if c not in grid.paths}
     planned = _connect_district_rings(grid, districts, planned)
-    streets = set(planned) | {c for c in streets if c in grid.paths}
-    streets = _close_ring_connectors(grid, streets, zone)
+    streets = _refine_streets(grid, set(planned), zone)
     planned = {c for c in streets if c not in grid.paths}
     districts = _build_district_objects(partition, streets)
     validate_layout_loops(districts, streets, grid, zone)

@@ -638,6 +638,7 @@ def score_footprint_flat(
     zone_cell_count: int,
     free_ratio: float,
     n_houses: int,
+    layout_min_zone: int,
     blob_min_houses: int,
     blob_free_ratio: float,
     blob_min_cells: int,
@@ -679,7 +680,12 @@ def score_footprint_flat(
             depth_bonus = dy * 4
 
     blob_penalty = 0
-    if n_houses >= blob_min_houses and free_ratio > blob_free_ratio and fp_len > 0:
+    if (
+        zone_cell_count < layout_min_zone
+        and n_houses >= blob_min_houses
+        and free_ratio > blob_free_ratio
+        and fp_len > 0
+    ):
         cap = blob_min_cells
         cap_calc = int(blob_zone_fraction * zone_cell_count)
         if cap_calc > cap:

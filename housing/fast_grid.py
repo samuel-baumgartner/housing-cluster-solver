@@ -621,9 +621,9 @@ class GridAccel:
         house_offsets: np.ndarray,
         planned_flat: np.ndarray,
         network: np.ndarray,
-        walkable: np.ndarray,
         score_gen: int,
     ) -> int:
+        from .layout import LAYOUT_MIN_ZONE
         from .scoring import (
             BLOB_MIN_CELLS,
             BLOB_PENALTY_FREE_RATIO,
@@ -651,6 +651,7 @@ class GridAccel:
                 zone_cell_count,
                 free_ratio,
                 n_houses,
+                LAYOUT_MIN_ZONE,
                 BLOB_PENALTY_MIN_HOUSES,
                 BLOB_PENALTY_FREE_RATIO,
                 BLOB_MIN_CELLS,
@@ -984,7 +985,6 @@ class SearchPass:
             self.house_offsets,
             self.planned_flat,
             self.network_mask,
-            self.walkable,
             gen,
         )
 
